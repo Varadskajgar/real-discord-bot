@@ -1,11 +1,8 @@
 from discord.ext import commands
-import discord
 
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
 
-# Function to stylize text similar to your example
 def stylize_text(text: str) -> str:
-    # Map normal letters to small caps-like unicode chars for example
     mapping = {
         'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ',
         'f': 'ꜰ', 'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ',
@@ -26,7 +23,7 @@ class StyledResponder(commands.Cog):
             return
         if action == "change" and text:
             styled = stylize_text(text)
-            await ctx.send(f"name changed {styled} ࿐")
+            await ctx.send(f"ᴛʟ  {styled}࿐")  # No space before symbol
         else:
             await ctx.send("Usage: ?name change <text>")
 
