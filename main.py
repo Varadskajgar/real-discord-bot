@@ -1,43 +1,58 @@
 import discord
 from discord.ext import commands
 import os
+import asyncio
 
-# Your 3 owner IDs for permission checks
+# Owner IDs
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
 
 intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="?", intents=intents)
+bot.remove_command("help")
 
-bot = commands.Bot(command_prefix='?', intents=intents, help_command=None)
+# Custom help command
+@bot.command()
+async def help(ctx):
+    if ctx.author.id not in OWNER_IDS:
+        return
 
-# Check if author is owner
-def is_owner():
-    def predicate(ctx):
-        return ctx.author.id in OWNER_IDS
-    return commands.check(predicate)
+    embed = discord.Embed(
+        title="📘 All Bot Commands",
+        description="Here's a list of all commands available to owners.",
+        color=discord.Color.blue()
+    )
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
-    print("------")
+    embed.add_field(name="🎟️ Ticket Commands", value=(
+        "`?setticketchannel`\n"
+        "`?add <user>`\n"
+        "`?remove <user>`\n"
+        "`?close`\n"
+        "`?reopen`\n"
+        "`?perclose`"
+    ), inline=False)
 
-# Custom help command that only owners can use
-@bot.command(name='needhelp')
-@is_owner()
-async def needhelp(ctx):
-    embed = discord.Embed(title="Bot Commands Help", color=discord.Color.blue())
-    embed.add_field(name="?role @user <role_key>", value="Assign roles", inline=False)
-    embed.add_field(name="?poll <question>", value="Create poll", inline=False)
-    embed.add_field(name="?dm <user/all> <message>", value="Send DM", inline=False)
-    embed.add_field(name="?joiners", value="List tournament joiners", inline=False)
-    embed.add_field(name="?announce #channel", value="Send tournament announcement", inline=False)
-    embed.add_field(name="?say <message>", value="Bot repeats message", inline=False)
-    embed.add_field(name="?ticket commands", value="Use ticket related commands", inline=False)
-    embed.add_field(name="?style <text>", value="Send styled text message", inline=False)
+    embed.add_field(name="⚙️ Utility", value="`?say <message>`", inline=False)
+    embed.add_field(name="📢 Polls", value="`?poll <question>`", inline=False)
+    embed.add_field(name="🔐 Role", value="`?role @user <role_key>`", inline=False)
+    embed.add_field(name="📨 DM Manager", value="`?dm all <message>`", inline=False)
+
+    embed.add_field(name="🏆 Tournament", value=(
+        "`?announce`\n"
+        "`?joiners`\n"
+        "`?clearjoiners`\n"
+        "`?match <info>`\n"
+        "`?dm joiners <id/pass>`"
+    ), inline=False)
+
+    embed.add_field(name="🅰️ Styled Responder", value="`?name change <text>`", inline=False)
+    embed.add_field(name="🤖 Autoresponder", value="Automatic reply on specific trigger words", inline=False)
+
     await ctx.send(embed=embed)
 
-# Load all cogs
-async def load_all_cogs():
-    cogs = [
+async def main():
+    token = os.getenv("TOKEN")
+
+    extensions = [
         "cogs.advanced_autoresponder",
         "cogs.advanced_ticket",
         "cogs.dm_manager",
@@ -47,20 +62,15 @@ async def load_all_cogs():
         "cogs.tournament",
         "cogs.utility",
     ]
-    for cog in cogs:
-        try:
-            await bot.load_extension(cog)
-            print(f"Loaded {cog}")
-        except Exception as e:
-            print(f"Failed to load {cog}: {e}")
 
-async def main():
-    await load_all_cogs()
-    token = os.getenv("TOKEN")
-    if not token:
-        print("Error: TOKEN environment variable not set")
-        return
+    for ext in extensions:
+        try:
+            await bot.load_extension(ext)
+            print(f"Loaded {ext}")
+        except Exception as e:
+            print(f"Failed to load {ext}: {e}")
+
     await bot.start(token)
 
-import asyncio
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
