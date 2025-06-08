@@ -6,7 +6,7 @@ import asyncio
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
 
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="+", intents=intents)
 bot.remove_command("help")
 
 @bot.command()
