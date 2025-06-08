@@ -34,7 +34,7 @@ async def help(ctx):
     embed.add_field(name="⚙️ Utility", value="`?say <message>`", inline=False)
     embed.add_field(name="📢 Polls", value="`?poll <question>`", inline=False)
     embed.add_field(name="🔐 Role", value="`?role @user <role_key>`", inline=False)
-    embed.add_field(name="📨 DM Manager", value="`?dm all <message>`", inline=False)
+    embed.add_field(name="📨 DM Manager", value="`?dm all <message>` or `?dm @user <message>`", inline=False)
 
     embed.add_field(name="🏆 Tournament", value=(
         "`?announce`\n"
@@ -45,7 +45,12 @@ async def help(ctx):
     ), inline=False)
 
     embed.add_field(name="🅰️ Styled Responder", value="`?name change <text>`", inline=False)
-    embed.add_field(name="🤖 Autoresponder", value="Automatic reply on specific trigger words", inline=False)
+
+    embed.add_field(name="🤖 Auto Responder", value=(
+        "`?addresponse <trigger> <reply>` - Add a new trigger-response\n"
+        "`?removeresponse <trigger>` - Remove an existing trigger\n"
+        "`?listresponses` - List all trigger-response pairs"
+    ), inline=False)
 
     await ctx.send(embed=embed)
 
