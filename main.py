@@ -3,14 +3,12 @@ from discord.ext import commands
 import os
 import asyncio
 
-# Owner IDs
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
 
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="?", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 bot.remove_command("help")
 
-# Custom help command
 @bot.command()
 async def help(ctx):
     if ctx.author.id not in OWNER_IDS:
@@ -46,10 +44,10 @@ async def help(ctx):
 
     embed.add_field(name="🅰️ Styled Responder", value="`?name change <text>`", inline=False)
 
-    embed.add_field(name="🤖 Auto Responder", value=(
-        "`?addresponse <trigger> <reply>` - Add a new trigger-response\n"
-        "`?removeresponse <trigger>` - Remove an existing trigger\n"
-        "`?listresponses` - List all trigger-response pairs"
+    embed.add_field(name="🤖 Auto Responder Commands", value=(
+        "`?addresponse <trigger> <reply>`\n"
+        "`?removeresponse <trigger>`\n"
+        "`?listresponses`"
     ), inline=False)
 
     await ctx.send(embed=embed)
