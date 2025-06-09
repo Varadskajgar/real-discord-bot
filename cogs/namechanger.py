@@ -1,51 +1,46 @@
 import discord
 from discord.ext import commands
-import asyncio
 
-OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
-
-class NameChanger(commands.Cog):
+class NicknameChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def name(self, ctx, subcommand=None, prefix=None, role: discord.Role = None):
-        if ctx.author.id not in OWNER_IDS:
-            return
-
-        if subcommand != "recreate" or not prefix or not role:
-            return await ctx.send("❌ Usage: `+name recreate TL @role`")
-
-        changed = 0
-        skipped = 0
-        no_permission = 0
-        report_lines = []
-
-        await ctx.send(f"🔄 Checking members in role `{role.name}`...")
+    @commands.command(name="nickname")
+    async def nickname(self, ctx, prefix: str, role: discord.Role):
+        changed = []
+        skipped = []
+        errors = []
 
         for member in role.members:
-            current_name = member.display_name
+            if member.bot:
+                continue
+
+            current_name = member.nick or member.name
             if current_name.startswith(prefix):
-                skipped += 1
+                skipped.append(member.mention)
                 continue
 
             new_name = f"{prefix} {current_name}"
             try:
                 await member.edit(nick=new_name)
-                changed += 1
-                report_lines.append(f"✅ {member.mention}: `{current_name}` → `{new_name}`")
+                changed.append(f"{member.mention} → `{new_name}`")
             except discord.Forbidden:
-                no_permission += 1
-                report_lines.append(f"❌ {member.mention}: Missing permission")
+                errors.append(f"❌ I don't have permission to change nickname of {member.mention}.")
+            except Exception as e:
+                errors.append(f"❌ Failed to change nickname of {member.mention}: {e}")
 
-            await asyncio.sleep(1)  # prevent rate limits
+        summary = ""
+        if changed:
+            summary += f"✅ Changed nicknames:\n" + "\n".join(changed[:20]) + "\n"
+        if skipped:
+            summary += f"⏩ Already had prefix:\n" + ", ".join(skipped[:20]) + "\n"
+        if errors:
+            summary += "\n".join(errors[:5]) + "\n"
 
-        await ctx.send(
-            f"✅ Done!\n🔁 Changed: {changed}\n⏩ Skipped: {skipped}\n❌ No permission: {no_permission}"
-        )
+        if not summary:
+            summary = "❗ No members were affected."
 
-        for chunk in [report_lines[i:i+20] for i in range(0, len(report_lines), 20)]:
-            await ctx.send("\n".join(chunk))
+        await ctx.send(summary)
 
 async def setup(bot):
-    await bot.add_cog(NameChanger(bot))
+    await bot.add_cog(NicknameChanger(bot))
