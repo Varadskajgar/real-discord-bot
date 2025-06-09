@@ -64,7 +64,7 @@ async def main():
         "cogs.styled_responder",
         "cogs.tournament",
         "cogs.utility",
-        "cogs.auto_namechange.py",
+        "cogs.namechanger.py",
     ]
 
     for ext in extensions:
