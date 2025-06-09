@@ -1,40 +1,87 @@
 import discord
 from discord.ext import commands
 
-GUILD_ROLE_ID = 1213510959742591016  # 🔁 Replace this with your actual role ID
-PREFIX = "TL "
-name_changes_log = []  # Optional: Used to track nickname changes
+OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
 
-class AutoNameChanger(commands.Cog):
+class AutoNameChange(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-    @commands.Cog.listener()
-    async def on_member_update(self, before, after):
-        has_role = any(role.id == GUILD_ROLE_ID for role in after.roles)
-        had_role = any(role.id == GUILD_ROLE_ID for role in before.roles)
-
-        if has_role and not had_role:
-            current_name = after.nick or after.name
-            if not current_name.startswith(PREFIX):
-                try:
-                    new_nick = PREFIX + current_name
-                    await after.edit(nick=new_nick)
-                    name_changes_log.append(f"{after} → `{new_nick}`")
-                    print(f"Nickname updated: {after} -> {new_nick}")
-                except discord.Forbidden:
-                    print(f"⚠️ Missing permission to change nickname for {after}")
-                except Exception as e:
-                    print(f"⚠️ Error changing nickname for {after}: {e}")
+        self.guild_data = {}  # {guild_id: {'role_id': int, 'prefix': str}}
 
     @commands.command()
-    async def namechangelog(self, ctx):
-        if ctx.author.id not in {1076200413503701072, 862239588391321600, 1135837895496847503}:
+    async def setguildrole(self, ctx, role: discord.Role):
+        if ctx.author.id not in OWNER_IDS:
+            return await ctx.send("❌ You don't have permission.")
+        guild_id = ctx.guild.id
+        if guild_id not in self.guild_data:
+            self.guild_data[guild_id] = {}
+        self.guild_data[guild_id]['role_id'] = role.id
+        await ctx.send(f"✅ Guild member role set to {role.name}")
+
+    @commands.command()
+    async def setprefix(self, ctx, *, prefix: str):
+        if ctx.author.id not in OWNER_IDS:
+            return await ctx.send("❌ You don't have permission.")
+        guild_id = ctx.guild.id
+        if guild_id not in self.guild_data:
+            self.guild_data[guild_id] = {}
+        self.guild_data[guild_id]['prefix'] = prefix
+        await ctx.send(f"✅ Prefix set to '{prefix}'")
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        guild_id = after.guild.id
+        if guild_id not in self.guild_data:
             return
-        if not name_changes_log:
-            await ctx.send("No nickname changes recorded.")
-        else:
-            await ctx.send("📜 Nickname changes:\n" + "\n".join(name_changes_log[-10:]))
+        data = self.guild_data[guild_id]
+        role_id = data.get('role_id')
+        prefix = data.get('prefix', 'TL ')
+
+        if role_id is None:
+            return
+
+        had_role_before = before.get_role(role_id) is not None
+        has_role_after = after.get_role(role_id) is not None
+
+        # Only proceed if role was added (not removed)
+        if not had_role_before and has_role_after:
+            # Add prefix if not already present
+            if not after.display_name.startswith(prefix):
+                new_name = prefix + after.display_name
+                try:
+                    await after.edit(nick=new_name, reason="Auto prefix added on role")
+                except discord.Forbidden:
+                    print(f"Missing permission to change nickname for {after.display_name}")
+                except Exception as e:
+                    print(f"Error changing nickname for {after.display_name}: {e}")
+
+    @commands.command()
+    async def namelist(self, ctx):
+        """Shows list of users with the prefix"""
+        guild_id = ctx.guild.id
+        if guild_id not in self.guild_data:
+            return await ctx.send("No guild role or prefix set.")
+
+        data = self.guild_data[guild_id]
+        role_id = data.get('role_id')
+        prefix = data.get('prefix', 'TL ')
+
+        if role_id is None:
+            return await ctx.send("Guild role not set.")
+
+        role = ctx.guild.get_role(role_id)
+        if not role:
+            return await ctx.send("Role not found.")
+
+        members = [m for m in role.members if m.nick and m.nick.startswith(prefix)]
+        if not members:
+            await ctx.send("No members with the prefix found.")
+            return
+
+        msg = "**Members with prefix:**\n"
+        for m in members:
+            msg += f"- {m.display_name} (ID: {m.id})\n"
+        await ctx.send(msg)
 
 async def setup(bot):
-    await bot.add_cog(AutoNameChanger(bot))
+    await bot.add_cog(AutoNameChange(bot))
