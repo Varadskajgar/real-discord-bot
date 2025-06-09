@@ -1,96 +1,69 @@
 import discord
 from discord.ext import commands
 
-OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
-NAME_PREFIX = "TL "
-GUILD_ROLE_NAME = "Guild Members"
-tracked_guild_id = None
-enabled = True
-
 class NameChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.guild_role_id = None
+        self.guild_tag = None
 
-    def is_owner(self, user_id):
-        return user_id in OWNER_IDS
-
-    @commands.Cog.listener()
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
-        if not enabled or after.bot:
+    @commands.command(name="setguildrole")
+    @commands.has_permissions(administrator=True)
+    async def set_guild_role(self, ctx, role: discord.Role = None):
+        if role is None:
+            await ctx.send("❌ Please mention a valid role. Usage: `+setguildrole @role`")
             return
+        self.guild_role_id = role.id
+        await ctx.send(f"✅ Guild role set to **{role.name}**.")
 
-        if tracked_guild_id and after.guild.id != tracked_guild_id:
+    @commands.command(name="setguildtag")
+    @commands.has_permissions(administrator=True)
+    async def set_guild_tag(self, ctx, *, tag: str = None):
+        if tag is None:
+            await ctx.send("❌ Please provide a tag. Usage: `+setguildtag <tag>`")
             return
+        self.guild_tag = tag
+        await ctx.send(f"✅ Guild tag set to **{tag}**.")
 
-        before_roles = set(before.roles)
-        after_roles = set(after.roles)
-
-        gained_roles = after_roles - before_roles
-        guild_member_role = discord.utils.get(after.guild.roles, name=GUILD_ROLE_NAME)
-
-        if guild_member_role in gained_roles:
-            try:
-                if not after.display_name.startswith(NAME_PREFIX):
-                    new_name = NAME_PREFIX + after.display_name
-                    await after.edit(nick=new_name[:32])
-                    print(f"Renamed {after} to {new_name}")
-            except discord.Forbidden:
-                print(f"Missing permissions to rename {after}")
-            except Exception as e:
-                print(f"Error renaming {after}: {e}")
-
-    @commands.command()
-    async def setguild(self, ctx):
-        global tracked_guild_id
-        if not self.is_owner(ctx.author.id):
-            return await ctx.send("❌ You don't have permission.")
-        tracked_guild_id = ctx.guild.id
-        await ctx.send(f"✅ Auto rename enabled for server `{ctx.guild.name}`.")
-
-    @commands.command()
-    async def setprefix(self, ctx, *, prefix: str):
-        global NAME_PREFIX
-        if not self.is_owner(ctx.author.id):
-            return await ctx.send("❌ You don't have permission.")
-        NAME_PREFIX = prefix
-        await ctx.send(f"✅ Prefix changed to `{prefix}`")
-
-    @commands.command()
-    async def setrolename(self, ctx, *, role_name: str):
-        global GUILD_ROLE_NAME
-        if not self.is_owner(ctx.author.id):
-            return await ctx.send("❌ You don't have permission.")
-        GUILD_ROLE_NAME = role_name
-        await ctx.send(f"✅ Guild role name set to `{role_name}`")
-
-    @commands.command()
-    async def toggleauto(self, ctx):
-        global enabled
-        if not self.is_owner(ctx.author.id):
-            return await ctx.send("❌ You don't have permission.")
-        enabled = not enabled
-        status = "enabled" if enabled else "disabled"
-        await ctx.send(f"✅ Auto rename system {status}.")
-
-    @commands.command()
-    async def renameall(self, ctx):
-        if not self.is_owner(ctx.author.id):
-            return await ctx.send("❌ You don't have permission.")
-
-        guild = ctx.guild
-        role = discord.utils.get(guild.roles, name=GUILD_ROLE_NAME)
-        if not role:
-            return await ctx.send(f"❌ Role `{GUILD_ROLE_NAME}` not found.")
+    @commands.command(name="namenchange")
+    async def name_change(self, ctx):
+        # Check if both are set
+        if not self.guild_role_id or not self.guild_tag:
+            await ctx.send("❌ Guild role or tag not set. Use `+setguildrole` and `+setguildtag` first.")
+            return
+        
+        guild_role = ctx.guild.get_role(self.guild_role_id)
+        if not guild_role:
+            await ctx.send("❌ The saved guild role does not exist on this server. Please set it again.")
+            return
 
         count = 0
-        for member in role.members:
-            if not member.bot and not member.display_name.startswith(NAME_PREFIX):
+        for member in ctx.guild.members:
+            if guild_role in member.roles:
                 try:
-                    await member.edit(nick=(NAME_PREFIX + member.display_name)[:32])
-                    count += 1
-                except:
-                    pass
-        await ctx.send(f"✅ Renamed `{count}` members with `{NAME_PREFIX}` prefix.")
+                    # If tag already in name, skip
+                    if not member.display_name.startswith(self.guild_tag):
+                        new_name = f"{self.guild_tag} {member.display_name}"
+                        await member.edit(nick=new_name)
+                        count += 1
+                except discord.Forbidden:
+                    await ctx.send(f"❌ I don't have permission to change nickname of {member.mention}.")
+                except Exception as e:
+                    await ctx.send(f"❌ Failed to change nickname for {member.mention}: {e}")
+
+        await ctx.send(f"✅ Updated nicknames for {count} members with the role **{guild_role.name}**.")
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send("❌ Missing arguments. Please check the command usage.")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.send("❌ Invalid argument provided. Please check the command usage.")
+        elif isinstance(error, commands.CheckFailure):
+            await ctx.send("❌ You don't have permission to use this command.")
+        else:
+            # For unexpected errors, you can print or ignore
+            print(f"Error in command {ctx.command}: {error}")
 
 async def setup(bot):
     await bot.add_cog(NameChanger(bot))
