@@ -14,33 +14,33 @@ class TicketView(discord.ui.View):
 
     @discord.ui.button(label="🎟️ Create Ticket", style=discord.ButtonStyle.blurple, custom_id="create_ticket")
     async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        global ticket_counter
+        global ticket_counter, ticket_category_id
 
         if interaction.user.id in open_tickets:
-            channel = interaction.guild.get_channel(open_tickets[interaction.user.id])
-            if channel:
-                await interaction.response.send_message(f"❗ You already have an open ticket: {channel.mention}", ephemeral=True)
+            existing = interaction.guild.get_channel(open_tickets[interaction.user.id])
+            if existing:
+                await interaction.response.send_message(f"❗ You already have an open ticket: {existing.mention}", ephemeral=True)
                 return
 
-        category = interaction.guild.get_channel(ticket_category_id)
+        # Create or fetch category
+        category = interaction.guild.get_channel(ticket_category_id) if ticket_category_id else None
         if not category:
             category = await interaction.guild.create_category("Tickets")
-            global ticket_category_id
             ticket_category_id = category.id
 
+        # Create channel
         ticket_name = f"ticket-{ticket_counter:03d}"
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
             interaction.guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
+        channel = await interaction.guild.create_text_channel(ticket_name, category=category, overwrites=overwrites)
+        await channel.send(f"Hello {interaction.user.mention}, our team will assist you shortly.")
 
-        ticket_channel = await interaction.guild.create_text_channel(ticket_name, category=category, overwrites=overwrites)
-        await ticket_channel.send(f"Hello {interaction.user.mention}, our staff will be with you shortly.")
-
-        await interaction.response.send_message(f"✅ Ticket created: {ticket_channel.mention}", ephemeral=True)
-        open_tickets[interaction.user.id] = ticket_channel.id
+        open_tickets[interaction.user.id] = channel.id
         ticket_counter += 1
+        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
 class AdvancedTicket(commands.Cog):
     def __init__(self, bot):
@@ -62,15 +62,25 @@ class AdvancedTicket(commands.Cog):
         await ctx.send(f"✅ Ticket panel sent to {channel.mention}.")
 
     @commands.command()
+    async def ticketstatus(self, ctx):
+        if ctx.author.id not in OWNER_IDS:
+            return
+        if ticket_channel_id:
+            ch = self.bot.get_channel(ticket_channel_id)
+            await ctx.send(f"🎯 Ticket panel is set to: {ch.mention}" if ch else "⚠️ Channel ID is set but not found.")
+        else:
+            await ctx.send("❌ Ticket panel is not set. Use `?setticketchannel #channel`.")
+
+    @commands.command()
     async def close(self, ctx):
-        if ctx.channel.category and ctx.channel.category.id == ticket_category_id:
+        if ctx.channel.category_id == ticket_category_id:
             await ctx.send("🔒 This ticket is now closed. Use `?reopen` or `?perclose`.")
         else:
             await ctx.send("❌ This is not a ticket channel.")
 
     @commands.command()
     async def reopen(self, ctx):
-        if ctx.channel.category and ctx.channel.category.id == ticket_category_id:
+        if ctx.channel.category_id == ticket_category_id:
             await ctx.send("🔓 Ticket reopened.")
         else:
             await ctx.send("❌ This is not a ticket channel.")
