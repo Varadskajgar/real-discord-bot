@@ -58,5 +58,23 @@ class DMManager(commands.Cog):
                     pass
         await ctx.send(f"📤 Message sent to {sent} users.")
 
+    @commands.command()
+    async def dmlist(self, ctx):
+        if ctx.author.id not in OWNER_IDS:
+            return
+        if not self.dm_list:
+            await ctx.send("📭 DM list is empty.")
+            return
+
+        embed = discord.Embed(title="📋 DM List", color=discord.Color.green())
+        for user_id in self.dm_list:
+            user = self.bot.get_user(user_id)
+            if user:
+                embed.add_field(name=user.name, value=f"<@{user.id}>", inline=False)
+            else:
+                embed.add_field(name="Unknown User", value=f"ID: {user_id}", inline=False)
+
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(DMManager(bot))
