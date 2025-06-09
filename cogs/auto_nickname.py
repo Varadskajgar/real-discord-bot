@@ -1,43 +1,40 @@
 import discord
 from discord.ext import commands
 
-GUILD_MEMBERS_ROLE_NAME = "Guild Members"
+GUILD_ROLE_ID = 1213510959742591016  # 🔁 Replace this with your actual role ID
 PREFIX = "TL "
+name_changes_log = []  # Optional: Used to track nickname changes
 
-class AutoNickname(commands.Cog):
+class AutoNameChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.Cog.listener()
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
-        before_roles = set(before.roles)
-        after_roles = set(after.roles)
+    async def on_member_update(self, before, after):
+        has_role = any(role.id == GUILD_ROLE_ID for role in after.roles)
+        had_role = any(role.id == GUILD_ROLE_ID for role in before.roles)
 
-        guild_members_role = discord.utils.get(after.guild.roles, name=GUILD_MEMBERS_ROLE_NAME)
-        if guild_members_role is None:
-            return  # Role not found
-
-        if guild_members_role not in before_roles and guild_members_role in after_roles:
-            current_nick = after.nick if after.nick else after.name
-            if not current_nick.startswith(PREFIX):
-                new_nick = PREFIX + current_nick
+        if has_role and not had_role:
+            current_name = after.nick or after.name
+            if not current_name.startswith(PREFIX):
                 try:
+                    new_nick = PREFIX + current_name
                     await after.edit(nick=new_nick)
+                    name_changes_log.append(f"{after} → `{new_nick}`")
+                    print(f"Nickname updated: {after} -> {new_nick}")
                 except discord.Forbidden:
-                    print("No permission to change nickname.")
+                    print(f"⚠️ Missing permission to change nickname for {after}")
                 except Exception as e:
-                    print(f"Error changing nickname: {e}")
+                    print(f"⚠️ Error changing nickname for {after}: {e}")
 
-        elif guild_members_role in before_roles and guild_members_role not in after_roles:
-            current_nick = after.nick if after.nick else after.name
-            if current_nick.startswith(PREFIX):
-                new_nick = current_nick[len(PREFIX):]
-                try:
-                    await after.edit(nick=new_nick)
-                except discord.Forbidden:
-                    print("No permission to change nickname.")
-                except Exception as e:
-                    print(f"Error changing nickname: {e}")
+    @commands.command()
+    async def namechangelog(self, ctx):
+        if ctx.author.id not in {1076200413503701072, 862239588391321600, 1135837895496847503}:
+            return
+        if not name_changes_log:
+            await ctx.send("No nickname changes recorded.")
+        else:
+            await ctx.send("📜 Nickname changes:\n" + "\n".join(name_changes_log[-10:]))
 
 async def setup(bot):
-    await bot.add_cog(AutoNickname(bot))
+    await bot.add_cog(AutoNameChanger(bot))
