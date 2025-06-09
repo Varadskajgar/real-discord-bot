@@ -28,7 +28,8 @@ async def help(ctx):
         "`+remove <user>`\n"
         "`+close`\n"
         "`+reopen`\n"
-        "`+perclose`"
+        "`+perclose`\n"
+        "`+sethighrole <@role>`"
     ), inline=False)
 
     embed.add_field(name="⚙️ Utility", value="`+say <message>`", inline=False)
@@ -36,7 +37,10 @@ async def help(ctx):
     embed.add_field(name="🔐 Role", value="`+role @user <role_key>`", inline=False)
     embed.add_field(name="📨 DM Manager", value=(
         "`+dm all <message>`\n"
-        "`+dm <@user> <message>`"
+        "`+dm <@user> <message>`\n"
+        "`+dmlist add <@user or ID>`\n"
+        "`+dmlist remove <@user or ID>`\n"
+        "`+dmlist show`"
     ), inline=False)
 
     embed.add_field(name="🏆 Tournament", value=(
@@ -48,6 +52,12 @@ async def help(ctx):
     ), inline=False)
 
     embed.add_field(name="🅰️ Styled Responder", value="`+name change <text>`", inline=False)
+    embed.add_field(name="📛 Auto Name Changer", value=(
+        "`+setguildrole <@role>`\n"
+        "`+setguildtag <text>`\n"
+        "`+namechanges`"
+    ), inline=False)
+
     embed.add_field(name="🤖 Autoresponder", value="Automatic reply on specific trigger words", inline=False)
 
     await ctx.send(embed=embed)
@@ -64,7 +74,7 @@ async def main():
         "cogs.styled_responder",
         "cogs.tournament",
         "cogs.utility",
-        "cogs.namechanger.py",
+        "cogs.namechanger",  # fixed: removed `.py`
     ]
 
     for ext in extensions:
