@@ -1,78 +1,62 @@
 import discord
 from discord.ext import commands
+import json
 import os
 
-USER_IDS_FILE = "user_ids.txt"
+OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
+DM_LIST_FILE = "dm_list.json"
 
-def load_user_ids():
-    if not os.path.exists(USER_IDS_FILE):
-        return []
-    with open(USER_IDS_FILE, "r") as f:
-        return f.read().splitlines()
+def load_dm_list():
+    if os.path.exists(DM_LIST_FILE):
+        with open(DM_LIST_FILE, "r") as f:
+            return json.load(f)
+    return []
 
-def save_user_id(user_id):
-    ids = load_user_ids()
-    if str(user_id) not in ids:
-        ids.append(str(user_id))
-        with open(USER_IDS_FILE, "w") as f:
-            f.write("\n".join(ids))
+def save_dm_list(dm_list):
+    with open(DM_LIST_FILE, "w") as f:
+        json.dump(dm_list, f)
 
 class DMManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.dm_list = load_dm_list()
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def adddm(self, ctx, *users: discord.User):
-        if not users:
-            await ctx.send("❌ Please mention at least one user or provide user IDs.")
+    async def adddm(self, ctx, member: discord.Member):
+        if ctx.author.id not in OWNER_IDS:
             return
-
-        added = []
-        for user in users:
-            save_user_id(user.id)
-            added.append(user.mention)
-
-        await ctx.send(f"✅ Added to DM list: {', '.join(added)}")
+        if member.id not in self.dm_list:
+            self.dm_list.append(member.id)
+            save_dm_list(self.dm_list)
+            await ctx.send(f"✅ {member.mention} added to DM list.")
+        else:
+            await ctx.send("ℹ️ User already in DM list.")
 
     @commands.command()
-    @commands.is_owner()
-    async def dm(self, ctx, target: str, *, message: str = None):
-        if target.lower() != "all":
-            await ctx.send("❌ Use: `?dm all <message>`")
+    async def removedm(self, ctx, member: discord.Member):
+        if ctx.author.id not in OWNER_IDS:
             return
-        if not message:
-            await ctx.send("❌ Please provide a message to send.")
-            return
-
-        user_ids = load_user_ids()
-        if not user_ids:
-            await ctx.send("❌ DM list is empty!")
-            return
-
-        sent_count = 0
-        for user_id in user_ids:
-            try:
-                user = await self.bot.fetch_user(int(user_id))
-                await user.send(message)
-                sent_count += 1
-            except:
-                pass
-
-        await ctx.send(f"✅ Message sent to {sent_count} users.")
+        if member.id in self.dm_list:
+            self.dm_list.remove(member.id)
+            save_dm_list(self.dm_list)
+            await ctx.send(f"❌ {member.mention} removed from DM list.")
+        else:
+            await ctx.send("ℹ️ User not found in DM list.")
 
     @commands.command()
-    async def dmlist(self, ctx):
-        user_ids = load_user_ids()
-        if not user_ids:
-            await ctx.send("DM list is empty!")
+    async def dmall(self, ctx, *, message):
+        if ctx.author.id not in OWNER_IDS:
             return
-
-        mentions = []
-        for uid in user_ids:
-            user = self.bot.get_user(int(uid))
-            mentions.append(f"<@{uid}>")
-        await ctx.send("Users in DM list:\n" + ", ".join(mentions))
+        sent = 0
+        for user_id in self.dm_list:
+            user = self.bot.get_user(user_id)
+            if user:
+                try:
+                    await user.send(message)
+                    sent += 1
+                except:
+                    pass
+        await ctx.send(f"📤 Message sent to {sent} users.")
 
 async def setup(bot):
     await bot.add_cog(DMManager(bot))
