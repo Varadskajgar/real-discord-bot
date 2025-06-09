@@ -1,74 +1,51 @@
 import discord
 from discord.ext import commands
+import asyncio
 
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
-guild_role_id = None  # Set via command
-auto_namechange_enabled = True
 
 class NameChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.Cog.listener()
-    async def on_member_update(self, before, after):
-        if not guild_role_id or not auto_namechange_enabled:
+    @commands.command()
+    async def name(self, ctx, subcommand=None, prefix=None, role: discord.Role = None):
+        if ctx.author.id not in OWNER_IDS:
             return
 
-        guild = after.guild
-        role = guild.get_role(guild_role_id)
-        if not role:
-            return
+        if subcommand != "recreate" or not prefix or not role:
+            return await ctx.send("❌ Usage: `+name recreate TL @role`")
 
-        # Check if user gained the guild role
-        if role in after.roles and role not in before.roles:
-            try:
-                current_nick = after.nick or after.name
-                new_nick = f"TL {current_nick}" if not current_nick.startswith("TL ") else current_nick
-                await after.edit(nick=new_nick)
-                channel = discord.utils.get(guild.text_channels, name="general") or guild.system_channel
-                if channel:
-                    await channel.send(f"✅ {after.mention}'s name changed from `{current_nick}` to `{new_nick}`.")
-            except discord.Forbidden:
-                pass
+        changed = 0
+        skipped = 0
+        no_permission = 0
+        report_lines = []
 
-    @commands.command()
-    async def setguildrole(self, ctx, role: discord.Role):
-        global guild_role_id
-        if ctx.author.id not in OWNER_IDS:
-            return await ctx.send("❌ You don't have permission.")
-        guild_role_id = role.id
-        await ctx.send(f"✅ Guild role set to `{role.name}`.")
-
-    @commands.command()
-    async def namechanges(self, ctx):
-        if ctx.author.id not in OWNER_IDS:
-            return await ctx.send("❌ You don't have permission.")
-
-        global guild_role_id
-        if not guild_role_id:
-            return await ctx.send("❌ Guild role not set. Use `+setguildrole @role` first.")
-
-        role = ctx.guild.get_role(guild_role_id)
-        if not role:
-            return await ctx.send("❌ The saved role ID is invalid. Set it again using `+setguildrole @role`.")
-
-        changed = []
-        failed = []
+        await ctx.send(f"🔄 Checking members in role `{role.name}`...")
 
         for member in role.members:
-            new_name = f"TL {member.display_name}" if not member.nick else f"TL {member.nick}"
-            if member.nick and member.nick.startswith("TL "):
+            current_name = member.display_name
+            if current_name.startswith(prefix):
+                skipped += 1
                 continue
+
+            new_name = f"{prefix} {current_name}"
             try:
                 await member.edit(nick=new_name)
-                changed.append(member.mention)
-            except:
-                failed.append(member.mention)
+                changed += 1
+                report_lines.append(f"✅ {member.mention}: `{current_name}` → `{new_name}`")
+            except discord.Forbidden:
+                no_permission += 1
+                report_lines.append(f"❌ {member.mention}: Missing permission")
+
+            await asyncio.sleep(1)  # prevent rate limits
 
         await ctx.send(
-            f"✅ Nicknames changed for {len(changed)} members:\n{', '.join(changed) or 'None'}\n\n"
-            f"❌ Failed to change for {len(failed)} members:\n{', '.join(failed) or 'None'}"
+            f"✅ Done!\n🔁 Changed: {changed}\n⏩ Skipped: {skipped}\n❌ No permission: {no_permission}"
         )
+
+        for chunk in [report_lines[i:i+20] for i in range(0, len(report_lines), 20)]:
+            await ctx.send("\n".join(chunk))
 
 async def setup(bot):
     await bot.add_cog(NameChanger(bot))
