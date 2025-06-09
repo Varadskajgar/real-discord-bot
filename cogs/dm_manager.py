@@ -1,80 +1,61 @@
-import discord
 from discord.ext import commands
-import json
-import os
+import discord
 
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
-DM_LIST_FILE = "dm_list.json"
-
-def load_dm_list():
-    if os.path.exists(DM_LIST_FILE):
-        with open(DM_LIST_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-def save_dm_list(dm_list):
-    with open(DM_LIST_FILE, "w") as f:
-        json.dump(dm_list, f)
+dm_user_ids = set()
 
 class DMManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.dm_list = load_dm_list()
 
     @commands.command()
-    async def adddm(self, ctx, member: discord.Member):
+    async def dmlist(self, ctx, action: str, *members_or_ids):
         if ctx.author.id not in OWNER_IDS:
-            return
-        if member.id not in self.dm_list:
-            self.dm_list.append(member.id)
-            save_dm_list(self.dm_list)
-            await ctx.send(f"✅ {member.mention} added to DM list.")
-        else:
-            await ctx.send("ℹ️ User already in DM list.")
+            return await ctx.send("❌ You don't have permission to use this command.")
 
-    @commands.command()
-    async def removedm(self, ctx, member: discord.Member):
-        if ctx.author.id not in OWNER_IDS:
-            return
-        if member.id in self.dm_list:
-            self.dm_list.remove(member.id)
-            save_dm_list(self.dm_list)
-            await ctx.send(f"❌ {member.mention} removed from DM list.")
-        else:
-            await ctx.send("ℹ️ User not found in DM list.")
+        updated = []
 
-    @commands.command()
-    async def dmall(self, ctx, *, message):
-        if ctx.author.id not in OWNER_IDS:
-            return
-        sent = 0
-        for user_id in self.dm_list:
-            user = self.bot.get_user(user_id)
-            if user:
-                try:
-                    await user.send(message)
-                    sent += 1
-                except:
-                    pass
-        await ctx.send(f"📤 Message sent to {sent} users.")
-
-    @commands.command()
-    async def dmlist(self, ctx):
-        if ctx.author.id not in OWNER_IDS:
-            return
-        if not self.dm_list:
-            await ctx.send("📭 DM list is empty.")
-            return
-
-        embed = discord.Embed(title="📋 DM List", color=discord.Color.green())
-        for user_id in self.dm_list:
-            user = self.bot.get_user(user_id)
-            if user:
-                embed.add_field(name=user.name, value=f"<@{user.id}>", inline=False)
+        if action.lower() == "add":
+            for item in members_or_ids:
+                member = await self._get_user(ctx, item)
+                if member:
+                    dm_user_ids.add(member.id)
+                    updated.append(f"✅ Added: {member} (`{member.id}`)")
+            if updated:
+                await ctx.send("\n".join(updated))
             else:
-                embed.add_field(name="Unknown User", value=f"ID: {user_id}", inline=False)
+                await ctx.send("⚠️ No valid users or IDs provided.")
 
-        await ctx.send(embed=embed)
+        elif action.lower() == "remove":
+            for item in members_or_ids:
+                member = await self._get_user(ctx, item)
+                if member and member.id in dm_user_ids:
+                    dm_user_ids.remove(member.id)
+                    updated.append(f"❌ Removed: {member} (`{member.id}`)")
+            if updated:
+                await ctx.send("\n".join(updated))
+            else:
+                await ctx.send("⚠️ No matching users or IDs found in DM list.")
+
+        elif action.lower() == "show":
+            if dm_user_ids:
+                desc = "\n".join(f"<@{uid}> (`{uid}`)" for uid in dm_user_ids)
+                await ctx.send(f"📬 **DM List:**\n{desc}")
+            else:
+                await ctx.send("📭 DM list is currently empty.")
+
+        else:
+            await ctx.send("❌ Invalid action. Use `add`, `remove`, or `show`.")
+
+    async def _get_user(self, ctx, value):
+        try:
+            if value.isdigit():
+                return await self.bot.fetch_user(int(value))
+            elif value.startswith("<@") and value.endswith(">"):
+                uid = int(value.strip("<@!>"))
+                return await self.bot.fetch_user(uid)
+        except:
+            return None
 
 async def setup(bot):
     await bot.add_cog(DMManager(bot))
