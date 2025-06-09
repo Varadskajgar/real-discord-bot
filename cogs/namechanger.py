@@ -2,46 +2,52 @@ import discord
 from discord.ext import commands
 
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
+guild_role_id = None  # Will be set using command
 
 class NameChanger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="namechanges")
-    async def name_changes(self, ctx):
+    @commands.command()
+    async def setguildrole(self, ctx, role: discord.Role):
+        """Owner command to set the role used for name changes."""
+        global guild_role_id
         if ctx.author.id not in OWNER_IDS:
-            return await ctx.send("❌ You don't have permission to use this command.")
+            return await ctx.send("❌ You don't have permission.")
+        guild_role_id = role.id
+        await ctx.send(f"✅ Guild role set to `{role.name}`.")
 
-        role = discord.utils.get(ctx.guild.roles, name="Guild Members")
+    @commands.command()
+    async def namechanges(self, ctx):
+        """Change names of all users with the set role by adding 'TL ' prefix."""
+        if ctx.author.id not in OWNER_IDS:
+            return await ctx.send("❌ You don't have permission.")
+
+        global guild_role_id
+        if not guild_role_id:
+            return await ctx.send("❌ Guild role not set. Use `+setguildrole @role` first.")
+
+        role = ctx.guild.get_role(guild_role_id)
         if not role:
-            return await ctx.send("❌ Role 'Guild Members' not found.")
+            return await ctx.send("❌ The saved role ID is invalid. Set it again using `+setguildrole @role`.")
 
-        successfully_changed = []
-        failed_to_change = []
+        changed = []
+        failed = []
 
         for member in role.members:
+            new_name = f"TL {member.display_name}" if not member.nick else f"TL {member.nick}"
+            if member.nick and member.nick.startswith("TL "):
+                continue  # Already updated
             try:
-                # Skip if already changed (nick starts with "TL ")
-                if member.nick and member.nick.startswith("TL "):
-                    continue
-                
-                new_nick = f"TL {member.nick if member.nick else member.name}"
-                await member.edit(nick=new_nick)
-                successfully_changed.append(member)
-            except discord.Forbidden:
-                failed_to_change.append(member)
-            except discord.HTTPException:
-                failed_to_change.append(member)
+                await member.edit(nick=new_name)
+                changed.append(member.mention)
+            except:
+                failed.append(member.mention)
 
-        msg = f"✅ Nicknames changed for {len(successfully_changed)} members:\n"
-        if successfully_changed:
-            msg += ", ".join(m.mention for m in successfully_changed) + "\n"
-
-        if failed_to_change:
-            msg += f"❌ Failed to change nickname for {len(failed_to_change)} members:\n"
-            msg += ", ".join(m.mention for m in failed_to_change)
-
-        await ctx.send(msg or "No nicknames were changed.")
+        await ctx.send(
+            f"✅ Nicknames changed for {len(changed)} members:\n{', '.join(changed) or 'None'}\n\n"
+            f"❌ Failed to change for {len(failed)} members:\n{', '.join(failed) or 'None'}"
+        )
 
 async def setup(bot):
     await bot.add_cog(NameChanger(bot))
