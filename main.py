@@ -75,7 +75,6 @@ async def main():
         "cogs.tournament",
         "cogs.utility",
         "cogs.namechanger",  # fixed: removed `.py`
-        "cogs.dmlist_adder"
     ]
 
     for ext in extensions:
