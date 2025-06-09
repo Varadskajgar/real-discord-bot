@@ -3,104 +3,122 @@ from discord.ext import commands
 import json
 import os
 
-DM_LIST_FILE = "dmlist.json"
 OWNER_IDS = {1076200413503701072, 862239588391321600, 1135837895496847503}
+DM_LIST_FILE = "dm_list.json"
+
+def load_dm_list():
+    if not os.path.exists(DM_LIST_FILE):
+        return []
+    with open(DM_LIST_FILE, "r") as f:
+        return json.load(f)
+
+def save_dm_list(dm_list):
+    with open(DM_LIST_FILE, "w") as f:
+        json.dump(dm_list, f)
 
 class DMManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.dmlist = set()
-        self.load_dmlist()
+        self.dm_list = load_dm_list()
 
-    def load_dmlist(self):
-        if os.path.exists(DM_LIST_FILE):
-            with open(DM_LIST_FILE, "r") as f:
-                try:
-                    self.dmlist = set(json.load(f))
-                except json.JSONDecodeError:
-                    self.dmlist = set()
-
-    def save_dmlist(self):
-        with open(DM_LIST_FILE, "w") as f:
-            json.dump(list(self.dmlist), f)
-
-    @commands.command(name="adddmserver")
-    async def add_dm_server(self, ctx, server_id: int):
+    @commands.command()
+    async def dm(self, ctx, target: discord.Member, *, message: str):
         if ctx.author.id not in OWNER_IDS:
-            return await ctx.send("❌ You do not have permission to use this command.")
+            return await ctx.send("❌ You don't have permission.")
+        try:
+            await target.send(message)
+            await ctx.send(f"✅ Message sent to {target.mention}")
+        except:
+            await ctx.send(f"❌ Failed to DM {target.mention}")
 
+    @commands.command()
+    async def dmall(self, ctx, *, message: str):
+        if ctx.author.id not in OWNER_IDS:
+            return await ctx.send("❌ You don't have permission.")
+
+        total = len(self.dm_list)
+        if total == 0:
+            return await ctx.send("⚠️ DM list is empty.")
+
+        success = 0
+        fail = 0
+        msg = await ctx.send(f"📤 Sending messages: `0%` (0/{total})")
+
+        for i, user_id in enumerate(self.dm_list, 1):
+            try:
+                user = await self.bot.fetch_user(user_id)
+                await user.send(message)
+                success += 1
+            except:
+                fail += 1
+
+            if i % 10 == 0 or i == total:
+                percent = int(i / total * 100)
+                await msg.edit(content=f"📤 Sending messages: `{percent}%` ({i}/{total})")
+
+        await ctx.send(f"✅ Finished sending.\n✅ Sent: {success}\n❌ Failed: {fail}")
+
+    @commands.group()
+    async def dmlist(self, ctx):
+        if ctx.author.id not in OWNER_IDS:
+            return await ctx.send("❌ You don't have permission.")
+        if ctx.invoked_subcommand is None:
+            await ctx.send("⚠️ Invalid subcommand. Use `add`, `remove`, `show`, or `addserver`.")
+
+    @dmlist.command(name="add")
+    async def dmlist_add(self, ctx, user: discord.User):
+        if user.id not in self.dm_list:
+            self.dm_list.append(user.id)
+            save_dm_list(self.dm_list)
+            await ctx.send(f"✅ Added {user.mention} to DM list.")
+        else:
+            await ctx.send(f"❗ {user.mention} is already in the DM list.")
+
+    @dmlist.command(name="remove")
+    async def dmlist_remove(self, ctx, user: discord.User):
+        if user.id in self.dm_list:
+            self.dm_list.remove(user.id)
+            save_dm_list(self.dm_list)
+            await ctx.send(f"✅ Removed {user.mention} from DM list.")
+        else:
+            await ctx.send(f"❗ {user.mention} is not in the DM list.")
+
+    @dmlist.command(name="show")
+    async def dmlist_show(self, ctx):
+        if not self.dm_list:
+            return await ctx.send("📭 DM list is currently empty.")
+        mentions = []
+        for uid in self.dm_list:
+            user = await self.bot.fetch_user(uid)
+            mentions.append(user.mention)
+        await ctx.send("📨 DM List:\n" + "\n".join(mentions))
+
+    @dmlist.command(name="addserver")
+    async def dmlist_addserver(self, ctx, server_id: int):
         guild = self.bot.get_guild(server_id)
         if not guild:
-            return await ctx.send("❌ I'm not in that server or it's an invalid ID.")
+            return await ctx.send("❌ I'm not in that server or the ID is incorrect.")
 
-        added = 0
-        for member in guild.members:
-            if not member.bot:
-                if member.id not in self.dmlist:
-                    self.dmlist.add(member.id)
-                    added += 1
+        await ctx.send(f"⏳ Starting to fetch users from **{guild.name}**...")
 
-        self.save_dmlist()
-        await ctx.send(f"✅ Added {added} users from `{guild.name}` to the DM list.")
+        members = [m for m in guild.members if not m.bot]
+        total = len(members)
+        if total == 0:
+            return await ctx.send("⚠️ No human members found in that server.")
 
-    @commands.command(name="dm")
-    async def dm(self, ctx, target: str = None, *, message: str = None):
-        if ctx.author.id not in OWNER_IDS:
-            return await ctx.send("❌ You do not have permission to use this command.")
-        
-        if not target or not message:
-            return await ctx.send("❌ Usage: `+dm all <message>` or `+dm @user <message>` or `+dm dmlist <message>`")
+        count = 0
+        msg = await ctx.send("Progress: `0%` (0/0)")
+        for i, member in enumerate(members, 1):
+            if member.id not in self.dm_list:
+                self.dm_list.append(member.id)
+                count += 1
 
-        if target.lower() == "all":
-            # DM all guild members of the current guild except bots
-            guild = ctx.guild
-            if not guild:
-                return await ctx.send("❌ This command can only be used in a server.")
-            count = 0
-            for member in guild.members:
-                if not member.bot:
-                    try:
-                        await member.send(message)
-                        count += 1
-                    except:
-                        pass
-            await ctx.send(f"✅ Sent DMs to {count} members of this server.")
-        
-        elif target.lower() == "dmlist":
-            # DM all users in the saved dmlist
-            count = 0
-            for user_id in self.dmlist:
-                user = self.bot.get_user(user_id)
-                if not user:
-                    try:
-                        user = await self.bot.fetch_user(user_id)
-                    except:
-                        continue
-                try:
-                    await user.send(message)
-                    count += 1
-                except:
-                    pass
-            await ctx.send(f"✅ Sent DMs to {count} users in the DM list.")
+            if i % 10 == 0 or i == total:
+                percent = int(i / total * 100)
+                await msg.edit(content=f"Progress: `{percent}%` ({i}/{total})")
 
-        else:
-            # DM specific user by mention or ID
-            # Try to get user from mention or ID
-            try:
-                user = None
-                if len(ctx.message.mentions) > 0:
-                    user = ctx.message.mentions[0]
-                else:
-                    user_id = int(target)
-                    user = self.bot.get_user(user_id)
-                    if not user:
-                        user = await self.bot.fetch_user(user_id)
-                if not user:
-                    return await ctx.send("❌ User not found.")
-                await user.send(message)
-                await ctx.send(f"✅ Sent DM to {user.mention}.")
-            except Exception as e:
-                await ctx.send(f"❌ Could not send DM: {e}")
+        save_dm_list(self.dm_list)
+        await ctx.send(f"✅ Finished. `{count}` new users added from `{guild.name}`.")
 
 async def setup(bot):
     await bot.add_cog(DMManager(bot))
